@@ -72,4 +72,38 @@ contract SwapSettlement is Ownable2Step, Pausable, ReentrancyGuard {
     function quoteSettle(uint256 totalUSDT) external view returns (uint256 feeUSDT, uint256 swapUSDT) {
         return _computeFee(totalUSDT);
     }
+
+    function settle(
+        bytes32 swapId,
+        address user,
+        uint256 totalUSDT,
+        uint256 minTRXOut,
+        uint256 deadline
+    ) external onlyExecutor whenNotPaused nonReentrant returns (uint256 trxOut) {
+        require(!usedSwapIds[swapId], "SwapSettlement: swapId used");
+        usedSwapIds[swapId] = true;
+
+        require(totalUSDT >= minSwapAmount, "SwapSettlement: below min swap");
+
+        (uint256 feeUSDT, uint256 swapUSDT) = _computeFee(totalUSDT);
+
+        IERC20(USDT).safeTransferFrom(user, address(this), totalUSDT);
+        IERC20(USDT).safeTransfer(owner(), feeUSDT);
+        IERC20(USDT).forceApprove(ROUTER, swapUSDT);
+
+        address[] memory path = new address[](2);
+        path[0] = USDT;
+        path[1] = WTRX;
+
+        uint256[] memory amounts = ISunswapV2Router(ROUTER).swapExactTokensForETH(
+            swapUSDT,
+            minTRXOut,
+            path,
+            user,
+            deadline
+        );
+        trxOut = amounts[amounts.length - 1];
+
+        emit Settled(swapId, user, totalUSDT, feeUSDT, trxOut);
+    }
 }
