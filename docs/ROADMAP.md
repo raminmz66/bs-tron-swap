@@ -26,7 +26,7 @@ The on-chain `settle()` logic. Defines the interface the backend calls.
 |---|---|
 | Brainstorm | ✅ Done |
 | Spec (`docs/superpowers/specs/2026-06-19-settlement-contract-design.md`) | ✅ Approved |
-| Plan (`docs/superpowers/plans/2026-06-24-settlement-contract.md`) | ✅ Written — ⏳ awaiting execution |
+| Plan (`docs/superpowers/plans/2026-06-24-settlement-contract.md`) | ✅ Approved — ⏳ executing in Cursor |
 | Build + unit tests (TronBox) | ⬜ Not started |
 | Nile testnet integration tests | ⬜ Not started |
 
@@ -65,14 +65,34 @@ Wallet connect, the single signing step, status screens. **This is where UI mock
 
 ## Where we are right now
 
-**Sub-project 1 (Contract) → Plan step → in progress (spec approved 2026-06-24).**
+**Sub-project 1 (Contract) → Build step → ready to hand off to Cursor for execution (plan approved 2026-06-24).**
 
 Immediate next steps:
-1. ✅ User reviewed and approved the contract spec
-2. 🔄 `writing-plans` skill → contract implementation plan
-3. TDD build of contract + tests
-4. Nile testnet verification
+1. ✅ Contract spec approved
+2. ✅ Implementation plan written & approved
+3. ⏳ Execute the plan in Cursor (subagent-driven). First human checkpoint: the Task 1A faucet step.
+4. Nile testnet verification → record deployed address + ABI in `docs/deployments.md`
 5. → then repeat the cycle for Sub-project 2 (Backend)
+
+---
+
+## Handoff protocol (Claude Code ⇄ Cursor)
+
+Git is the shared bus; the docs below are the handoff contract. Neither tool talks to the other directly.
+
+**Division of labor:** Claude Code (Opus 4.8) does brainstorm → spec → plan (low-token, high-leverage). Cursor AUTO executes the plan (high-token implementation). Repeat per sub-project, in dependency order.
+
+**State lives in four committed artifacts:**
+- `AGENTS.md` — standing context every agent auto-reads (Claude Code owns it)
+- `docs/superpowers/specs/<date>-<scope>.md` — one per sub-project (Claude Code writes)
+- `docs/superpowers/plans/<date>-<scope>.md` — one per sub-project (Claude Code writes)
+- `docs/ROADMAP.md` — this file; the live status board (both update)
+
+**Claude Code → Cursor checklist:** spec + plan + ROADMAP committed and pushed; `AGENTS.md` updated if new execution facts; hand Cursor the one-line prompt pointing at the new plan file.
+
+**Cursor → Claude Code checklist:** all task commits pushed; ROADMAP "Where we are right now" current; deviations from the plan noted in commit messages; outputs the next sub-project needs recorded (for the contract: deployed Nile address + final ABI → `docs/deployments.md`).
+
+**Three rules:** (1) pull before starting, push when finishing — both sides, never edit concurrently. (2) One sub-project in flight at a time — each depends on the prior one's interface. (3) Deviations get written down, not just done.
 
 ---
 
