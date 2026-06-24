@@ -26,7 +26,7 @@ The on-chain `settle()` logic. Defines the interface the backend calls.
 |---|---|
 | Brainstorm | ✅ Done |
 | Spec (`docs/superpowers/specs/2026-06-19-settlement-contract-design.md`) | ✅ Approved |
-| Plan | 🔄 In progress |
+| Plan (`docs/superpowers/plans/2026-06-24-settlement-contract.md`) | ✅ Written — ⏳ awaiting execution |
 | Build + unit tests (TronBox) | ⬜ Not started |
 | Nile testnet integration tests | ⬜ Not started |
 
