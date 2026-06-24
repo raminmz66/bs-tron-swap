@@ -6,7 +6,9 @@
 
 **Architecture:** A single non-upgradeable contract `SwapSettlement` inheriting OpenZeppelin `Ownable2Step`, `Pausable`, and `ReentrancyGuard`. It is the on-chain source of truth for the USDT fee split. Only a designated `executor` (the backend hot wallet) may call `settle()`. The contract is the first of three sub-projects (contract → backend → frontend); it defines the interface the backend will later call. Built and unit-tested locally against mock USDT/router contracts, then integration-tested on Nile testnet against the real SunSwap V2 router.
 
-**Tech Stack:** Solidity `0.8.18`, TronBox (Truffle-style framework for TVM), OpenZeppelin Contracts `4.9.6`, Docker (`tronbox/tre` local node), Mocha/Chai (TronBox's built-in test runner), `dotenv` for key/config management.
+**Tech Stack:** Solidity `0.8.18`, TronBox (Truffle-style framework for TVM), OpenZeppelin Contracts `4.9.6`, **Nile testnet** as the test environment (Mocha/Chai via `npx tronbox test --network nile`), `dotenv` for key/config management.
+
+**Test environment note:** We test on the public **Nile testnet**, not a local node. The TronBox local-node image (`tronbox/tre`) is published arm64-only and this is an amd64 host; under QEMU it is both unusably slow (~5.6s/RPC call) and its account-seeding fails. Nile is real TVM, needs no Docker, and confirms transactions in ~3s. Consequence: a public testnet has **no pre-unlocked `accounts[]`** the way a local node does, so we configure the `nile` network with an **array of pre-funded private keys** (Task 1A) and reference them as `accounts[0..5]` in tests exactly as before.
 
 **Source spec:** `docs/superpowers/specs/2026-06-19-settlement-contract-design.md`
 
@@ -14,6 +16,7 @@
 
 These apply to every task. Exact values copied from the spec.
 
+- **Tests run on Nile testnet** (`--network nile`), never a local node. The `nile` network's `privateKey` is an ARRAY of ≥6 pre-funded keys → these become `accounts[0..5]` in tests. `accounts[0]`=executor, `[1]`=owner/treasury, `[2]`=user, `[3]`=stranger, `[4]`=new executor, `[5]`=new owner. All six must hold a little TRX (for energy/bandwidth); the user account also receives swapped TRX. `MockUSDT.mint` is permissionless, so unit tests mint freely — no faucet USDT needed (only the real-USDT integration test in Task 8 does).
 - **Solidity version: exactly `0.8.18`.** This targets the Paris EVM (no `PUSH0` opcode), which the TVM does not support. Do NOT use ≥0.8.20 unless `evmVersion: 'paris'` is also pinned.
 - **OpenZeppelin Contracts: exactly `4.9.6`.** v5.x requires `^0.8.20` (PUSH0 problem). In 4.9.6, `Ownable`'s constructor takes NO argument (deployer becomes owner by default).
 - **All USDT movements MUST use `SafeERC20`** (`safeTransfer`, `safeTransferFrom`, `forceApprove`). Never `require(token.transferFrom(...))` — Tether returns no bool.
@@ -44,7 +47,7 @@ These apply to every task. Exact values copied from the spec.
 
 **Interfaces:**
 - Consumes: nothing (first task)
-- Produces: a compilable TronBox project. Solidity compiler pinned to `0.8.18`. Network definitions `development` (local TRE, `http://127.0.0.1:9090`), `nile` (`https://nile.trongrid.io`), `mainnet` (`https://api.trongrid.io`).
+- Produces: a compilable TronBox project. Solidity compiler pinned to `0.8.18`. Network definitions `nile` (`https://nile.trongrid.io`, the test/dev network — `privateKey` is an array of funded keys) and `mainnet` (`https://api.trongrid.io`).
 
 - [ ] **Step 1: Initialize the project and install dependencies**
 
@@ -66,17 +69,22 @@ Replace the generated `tronbox.js` with:
 ```javascript
 require('dotenv').config();
 
+// Nile uses an ARRAY of pre-funded keys so tests have accounts[0..5]
+// (a public testnet has no pre-unlocked accounts). Empty/undefined slots
+// are filtered out so the file still loads before keys are generated.
+const nileKeys = [
+  process.env.PRIVATE_KEY_NILE_0,
+  process.env.PRIVATE_KEY_NILE_1,
+  process.env.PRIVATE_KEY_NILE_2,
+  process.env.PRIVATE_KEY_NILE_3,
+  process.env.PRIVATE_KEY_NILE_4,
+  process.env.PRIVATE_KEY_NILE_5,
+].filter(Boolean);
+
 module.exports = {
   networks: {
-    development: {
-      privateKey: process.env.PRIVATE_KEY_DEV,
-      userFeePercentage: 0,
-      feeLimit: 1000 * 1e6,
-      fullHost: 'http://127.0.0.1:9090',
-      network_id: '*',
-    },
     nile: {
-      privateKey: process.env.PRIVATE_KEY_NILE,
+      privateKey: nileKeys,
       userFeePercentage: 100,
       feeLimit: 1000 * 1e6,
       fullHost: 'https://nile.trongrid.io',
@@ -104,14 +112,18 @@ module.exports = {
 - [ ] **Step 3: Write `.env.example`**
 
 ```bash
-# Local TRE node — use one of the pre-funded private keys printed by the docker container
-PRIVATE_KEY_DEV=
+# Nile testnet — SIX test keys → accounts[0..5]. Generate with scripts/gen-accounts.js,
+# fund [0] from https://nileex.io/join/getJoinPage, then fund [1..5] via scripts/fund-accounts.js.
+PRIVATE_KEY_NILE_0=
+PRIVATE_KEY_NILE_1=
+PRIVATE_KEY_NILE_2=
+PRIVATE_KEY_NILE_3=
+PRIVATE_KEY_NILE_4=
+PRIVATE_KEY_NILE_5=
 
-# Nile testnet — the key for an address funded from https://nileex.io/join/getJoinPage
-PRIVATE_KEY_NILE=
-# USDT TRC-20 address on Nile (obtain test USDT from the faucet, then read its contract address)
+# Real USDT TRC-20 address on Nile (for the Task 8 integration test only)
 NILE_USDT_ADDRESS=
-# Cold-key (owner/treasury) and backend hot-wallet (executor) addresses for Nile deploy
+# Owner (cold key) + executor (hot wallet) for a real Nile deploy (Task 7)
 NILE_OWNER_ADDRESS=
 NILE_EXECUTOR_ADDRESS=
 
@@ -141,6 +153,83 @@ Expected: compiles `Migrations.sol` with solc `0.8.18`, writes artifacts to `bui
 ```bash
 git add tronbox.js .env.example .gitignore package.json package-lock.json contracts/ migrations/
 git commit -m "chore: scaffold TronBox project (solc 0.8.18, OZ 4.9.6)"
+```
+
+---
+
+### Task 1A: Generate and fund six Nile test accounts
+
+**Files:**
+- Create: `scripts/gen-accounts.js`
+- Create: `scripts/fund-accounts.js`
+
+**Interfaces:**
+- Consumes: TronWeb (bundled with TronBox; import via `tronweb`)
+- Produces: six funded Nile keypairs in `.env` as `PRIVATE_KEY_NILE_0..5`, each holding TRX for energy/bandwidth. These become `accounts[0..5]` in every test.
+
+> **Why:** Nile is a public chain with no pre-unlocked accounts. The faucet funds only ONE address per day. So we generate six keypairs, fund the first from the faucet, then fan TRX out to the other five from the first.
+
+- [ ] **Step 1: Write the key-generation script**
+
+`scripts/gen-accounts.js`:
+
+```javascript
+const { TronWeb } = require('tronweb');
+
+(async () => {
+  const tronWeb = new TronWeb({ fullHost: 'https://nile.trongrid.io' });
+  console.log('# Paste these into .env:');
+  for (let i = 0; i < 6; i++) {
+    const acc = await tronWeb.createAccount();
+    console.log(`PRIVATE_KEY_NILE_${i}=${acc.privateKey.toLowerCase()}   # ${acc.address.base58}`);
+  }
+})();
+```
+
+- [ ] **Step 2: Generate the keys**
+
+Run: `node scripts/gen-accounts.js`
+Copy the six `PRIVATE_KEY_NILE_*` lines into `.env`. Note the printed base58 address of account 0.
+
+- [ ] **Step 3: Fund account 0 from the faucet**
+
+Open https://nileex.io/join/getJoinPage, paste account 0's base58 address, complete the captcha, and claim (2000 test TRX, one claim/day). Wait ~1 minute for arrival.
+
+- [ ] **Step 4: Write the funding script (fans TRX from account 0 to 1..5)**
+
+`scripts/fund-accounts.js`:
+
+```javascript
+require('dotenv').config();
+const { TronWeb } = require('tronweb');
+
+(async () => {
+  const keys = [0,1,2,3,4,5].map((i) => process.env[`PRIVATE_KEY_NILE_${i}`]);
+  if (keys.some((k) => !k)) throw new Error('Set PRIVATE_KEY_NILE_0..5 in .env first');
+
+  const tronWeb = new TronWeb({ fullHost: 'https://nile.trongrid.io', privateKey: keys[0] });
+  const from = tronWeb.address.fromPrivateKey(keys[0]);
+  const PER_ACCOUNT = 300 * 1e6; // 300 TRX each → accounts 1..5
+
+  for (let i = 1; i < keys.length; i++) {
+    const to = tronWeb.address.fromPrivateKey(keys[i]);
+    const tx = await tronWeb.trx.sendTransaction(to, PER_ACCOUNT);
+    console.log(`funded accounts[${i}] ${to}: ${tx.result}`);
+  }
+  console.log('from (accounts[0]) balance SUN:', await tronWeb.trx.getBalance(from));
+})();
+```
+
+- [ ] **Step 5: Fund the other five accounts**
+
+Run: `node scripts/fund-accounts.js`
+Expected: five `funded accounts[i] ... true` lines. Each of accounts[1..5] now holds 300 TRX; account 0 keeps the remainder (~500 TRX) for deploys and energy.
+
+- [ ] **Step 6: Commit the scripts (NOT the keys)**
+
+```bash
+git add scripts/gen-accounts.js scripts/fund-accounts.js
+git commit -m "chore: scripts to generate and fund Nile test accounts"
 ```
 
 ---
@@ -324,21 +413,15 @@ contract('mocks', (accounts) => {
 });
 ```
 
-- [ ] **Step 5: Start the local node and run the test**
+- [ ] **Step 5: Run the test against Nile**
 
-In a separate terminal, start the local TRE node (leave it running for all subsequent test tasks):
-
-```bash
-docker run -it -p 9090:9090 --rm --name tron tronbox/tre
-```
-
-The container prints ~10 pre-funded accounts with their private keys. Copy the first private key into `.env` as `PRIVATE_KEY_DEV`. Then:
+With `.env` populated and accounts funded (Task 1A):
 
 ```bash
-npx tronbox test ./test/mocks.test.js --network development
+npx tronbox test ./test/mocks.test.js --network nile
 ```
 
-Expected: both tests PASS.
+Expected: both tests PASS (allow ~10–30s; each tx waits ~3s for a Nile block). `tronWeb.trx.sendTransaction` uses `accounts[0]`'s key (first in the array) to fund the router.
 
 - [ ] **Step 6: Commit**
 
@@ -459,7 +542,7 @@ const MIN_SWAP = '50000000';    // 50 USDT
 async function deploy(accounts) {
   const usdt = await MockUSDT.new();
   const router = await MockRouter.new();
-  const wtrx = accounts[9]; // any non-zero address stands in for WTRX in unit tests
+  const wtrx = 'TYsbWxNnyTgsZaTFaue9hqpxkU3Fkco94a'; // Nile WTRX (placeholder; mock router ignores path[1])
   const settlement = await SwapSettlement.new(
     usdt.address, router.address, wtrx,
     accounts[1],            // owner (cold key / treasury)
@@ -498,7 +581,7 @@ contract('SwapSettlement.quoteSettle', (accounts) => {
 
 - [ ] **Step 4: Run the test to confirm it fails**
 
-Run: `npx tronbox test ./test/quoteSettle.test.js --network development`
+Run: `npx tronbox test ./test/quoteSettle.test.js --network nile`
 Expected: FAIL — `settlement.quoteSettle is not a function` (method not yet implemented).
 
 - [ ] **Step 5: Implement `_computeFee` and `quoteSettle`**
@@ -520,7 +603,7 @@ Add these methods inside `SwapSettlement` (after the constructor):
 
 - [ ] **Step 6: Run the test to confirm it passes**
 
-Run: `npx tronbox test ./test/quoteSettle.test.js --network development`
+Run: `npx tronbox test ./test/quoteSettle.test.js --network nile`
 Expected: all three tests PASS.
 
 - [ ] **Step 7: Commit**
@@ -561,7 +644,7 @@ async function deployWired(accounts) {
   const usdt = await MockUSDT.new();
   const router = await MockRouter.new();
   const settlement = await SwapSettlement.new(
-    usdt.address, router.address, accounts[9],
+    usdt.address, router.address, 'TYsbWxNnyTgsZaTFaue9hqpxkU3Fkco94a', // WTRX placeholder (mock router ignores path[1])
     accounts[1], accounts[0],
     MIN_FEE, FEE_BPS, MAX_FEE_BPS, MIN_SWAP
   );
@@ -607,7 +690,7 @@ contract('SwapSettlement.settle (happy path)', (accounts) => {
 
 - [ ] **Step 2: Run the test to confirm it fails**
 
-Run: `npx tronbox test ./test/settle.test.js --network development`
+Run: `npx tronbox test ./test/settle.test.js --network nile`
 Expected: FAIL — `settlement.settle is not a function`.
 
 - [ ] **Step 3: Implement `settle()`**
@@ -652,7 +735,7 @@ Add inside `SwapSettlement` (after `quoteSettle`):
 
 - [ ] **Step 4: Run the test to confirm it passes**
 
-Run: `npx tronbox test ./test/settle.test.js --network development`
+Run: `npx tronbox test ./test/settle.test.js --network nile`
 Expected: PASS. (This test also proves `SafeERC20` works against `MockUSDT`'s non-bool-returning ABI, since every USDT move goes through the safe wrappers.)
 
 - [ ] **Step 5: Commit**
@@ -708,7 +791,7 @@ async function deployWired(accounts) {
   const usdt = await MockUSDT.new();
   const router = await MockRouter.new();
   const settlement = await SwapSettlement.new(
-    usdt.address, router.address, accounts[9],
+    usdt.address, router.address, 'TYsbWxNnyTgsZaTFaue9hqpxkU3Fkco94a', // WTRX placeholder (mock router ignores path[1])
     accounts[1], accounts[0],
     MIN_FEE, FEE_BPS, MAX_FEE_BPS, MIN_SWAP
   );
@@ -799,7 +882,7 @@ contract('SwapSettlement.settle (guards)', (accounts) => {
 
 - [ ] **Step 3: Run the tests**
 
-Run: `npx tronbox test ./test/settle-guards.test.js --network development`
+Run: `npx tronbox test ./test/settle-guards.test.js --network nile`
 Expected: all six tests PASS. The slippage test confirms the spec's key guarantee — on revert the user keeps their USDT and the `swapId` is freed for retry.
 
 - [ ] **Step 4: Commit**
@@ -842,7 +925,7 @@ async function deploy(accounts) {
   const usdt = await MockUSDT.new();
   const router = await MockRouter.new();
   return SwapSettlement.new(
-    usdt.address, router.address, accounts[9],
+    usdt.address, router.address, 'TYsbWxNnyTgsZaTFaue9hqpxkU3Fkco94a', // WTRX placeholder (mock router ignores path[1])
     accounts[1], accounts[0],
     MIN_FEE, FEE_BPS, MAX_FEE_BPS, MIN_SWAP
   );
@@ -903,7 +986,7 @@ contract('SwapSettlement.admin', (accounts) => {
 
 - [ ] **Step 2: Run the tests to confirm they fail**
 
-Run: `npx tronbox test ./test/admin.test.js --network development`
+Run: `npx tronbox test ./test/admin.test.js --network nile`
 Expected: FAIL — `setMinFee`/`setExecutor` not functions (ownership tests may already pass via inherited `Ownable2Step`).
 
 - [ ] **Step 3: Implement the setters**
@@ -943,12 +1026,12 @@ Add inside `SwapSettlement` (after `unpause`):
 
 - [ ] **Step 4: Run the tests to confirm they pass**
 
-Run: `npx tronbox test ./test/admin.test.js --network development`
+Run: `npx tronbox test ./test/admin.test.js --network nile`
 Expected: all six tests PASS.
 
 - [ ] **Step 5: Run the full suite**
 
-Run: `npx tronbox test --network development`
+Run: `npx tronbox test --network nile`
 Expected: every test from Tasks 2–6 PASSES.
 
 - [ ] **Step 6: Commit**
@@ -960,15 +1043,14 @@ git commit -m "feat: admin setters (fee params, executor rotation) with bounds"
 
 ---
 
-### Task 7: Network-aware migration + local deploy verification
+### Task 7: Deployment migration (env-gated, skips cleanly during tests)
 
 **Files:**
 - Create: `migrations/2_deploy_settlement.js`
-- Test: manual deploy against the local TRE node
 
 **Interfaces:**
-- Consumes: `SwapSettlement`, `MockUSDT`, `MockRouter` constructors
-- Produces: a migration that, on `development`, deploys mocks + a wired `SwapSettlement`; on `nile`/`mainnet`, deploys only `SwapSettlement` against real addresses from env vars.
+- Consumes: `SwapSettlement` constructor
+- Produces: a migration that deploys a real-address `SwapSettlement` ONLY when the network's deploy env vars are set; otherwise it is a no-op. This matters because `tronbox test` runs migrations first — without the guard, unit-test runs (Tasks 2–6, no deploy env) would fail. Unit tests deploy their own instances via `.new()`, so the migration must not deploy during them.
 
 - [ ] **Step 1: Write the migration**
 
@@ -976,83 +1058,57 @@ git commit -m "feat: admin setters (fee params, executor rotation) with bounds"
 
 ```javascript
 const SwapSettlement = artifacts.require('SwapSettlement');
-const MockUSDT = artifacts.require('MockUSDT');
-const MockRouter = artifacts.require('MockRouter');
 
-// Fee defaults (override per-network via env if desired)
 const MIN_FEE = '4000000';
 const FEE_BPS = '60';
 const MAX_FEE_BPS = '800';
 const MIN_SWAP = '50000000';
 
+const ROUTER = {
+  nile: 'TMn1qrmYUMSTXo9babrJLzepKZoPC7M6Sy',
+  mainnet: 'TNJVzGqKBWkJxJB5XYSqGAwUTV15U24pPq',
+};
+const WTRX = {
+  nile: 'TYsbWxNnyTgsZaTFaue9hqpxkU3Fkco94a',
+  mainnet: 'TNUC9Qb1rRpS5CbWLmNMxXBjyFoydXjWFR',
+};
 const DEPLOY_OPTS = { fee_limit: 1.5e9, userFeePercentage: 100, originEnergyLimit: 1e8 };
 
-module.exports = async function (deployer, network, accounts) {
-  if (network === 'development') {
-    await deployer.deploy(MockUSDT);
-    const usdt = await MockUSDT.deployed();
-    await deployer.deploy(MockRouter);
-    const router = await MockRouter.deployed();
-    await deployer.deploy(
-      SwapSettlement,
-      usdt.address, router.address, accounts[9],
-      accounts[1],  // owner
-      accounts[0],  // executor
-      MIN_FEE, FEE_BPS, MAX_FEE_BPS, MIN_SWAP,
-      DEPLOY_OPTS
-    );
-    return;
-  }
-
-  // nile / mainnet: real addresses from env
-  const prefix = network.toUpperCase(); // NILE_ or MAINNET_
+module.exports = async function (deployer, network) {
+  const prefix = network.toUpperCase(); // NILE_ / MAINNET_
   const usdt = process.env[`${prefix}_USDT_ADDRESS`];
-  const router = network === 'nile'
-    ? 'TMn1qrmYUMSTXo9babrJLzepKZoPC7M6Sy'
-    : 'TNJVzGqKBWkJxJB5XYSqGAwUTV15U24pPq';
-  const wtrx = network === 'nile'
-    ? 'TYsbWxNnyTgsZaTFaue9hqpxkU3Fkco94a'
-    : 'TNUC9Qb1rRpS5CbWLmNMxXBjyFoydXjWFR';
   const owner = process.env[`${prefix}_OWNER_ADDRESS`];
   const executor = process.env[`${prefix}_EXECUTOR_ADDRESS`];
+  const router = ROUTER[network];
 
-  if (!usdt || !owner || !executor) {
-    throw new Error(`Missing env for ${network}: set ${prefix}_USDT_ADDRESS, ${prefix}_OWNER_ADDRESS, ${prefix}_EXECUTOR_ADDRESS`);
+  // No-op unless fully configured. Unit-test runs leave these unset so the
+  // migration deploys nothing and tests use .new() mocks instead.
+  if (!router || !usdt || !owner || !executor) {
+    console.log(`[2_deploy_settlement] skipped on "${network}" — set ${prefix}_USDT_ADDRESS, ${prefix}_OWNER_ADDRESS, ${prefix}_EXECUTOR_ADDRESS to deploy a real instance`);
+    return;
   }
 
   await deployer.deploy(
     SwapSettlement,
-    usdt, router, wtrx, owner, executor,
+    usdt, router, WTRX[network], owner, executor,
     MIN_FEE, FEE_BPS, MAX_FEE_BPS, MIN_SWAP,
     DEPLOY_OPTS
   );
 };
 ```
 
-- [ ] **Step 2: Deploy to the local node**
+- [ ] **Step 2: Verify the migration skips cleanly when no deploy env is set**
 
-Run: `npx tronbox migrate --reset --network development`
-Expected: deploys `Migrations`, `MockUSDT`, `MockRouter`, and `SwapSettlement` with no errors; prints the `SwapSettlement` contract address.
+Ensure `NILE_USDT_ADDRESS`/`NILE_OWNER_ADDRESS`/`NILE_EXECUTOR_ADDRESS` are unset (or commented) in `.env`, then run:
 
-- [ ] **Step 3: Sanity-check the deployed contract**
+Run: `npx tronbox migrate --network nile`
+Expected: prints `[2_deploy_settlement] skipped on "nile" — set ...` and exits 0. (Confirms `tronbox test --network nile` won't be blocked by this migration.)
 
-Run: `npx tronbox console --network development`
-In the console:
-
-```javascript
-const s = await SwapSettlement.deployed();
-(await s.minFee()).toString();        // '4000000'
-(await s.owner());                    // base58 of accounts[1]
-const q = await s.quoteSettle('1000000000'); q.feeUSDT.toString(); // '6000000'
-```
-
-Expected: values match. Type `.exit` to leave.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add migrations/2_deploy_settlement.js
-git commit -m "feat: network-aware deploy migration (mocks on dev, real addrs on nile/mainnet)"
+git commit -m "feat: env-gated deploy migration (no-op without deploy env)"
 ```
 
 ---
@@ -1067,7 +1123,7 @@ git commit -m "feat: network-aware deploy migration (mocks on dev, real addrs on
 - Consumes: deployed `SwapSettlement` on Nile, real SunSwap V2 router, real Nile USDT
 - Produces: a one-shot integration test confirming `swapExactTokensForETH` auto-unwraps WTRX→native TRX against the real router; a written runbook for deploying to Nile and (eventually) mainnet.
 
-> **Prerequisite:** Fund a Nile address from https://nileex.io/join/getJoinPage (also dispenses test USDT). Set `PRIVATE_KEY_NILE`, `NILE_USDT_ADDRESS`, `NILE_OWNER_ADDRESS`, `NILE_EXECUTOR_ADDRESS` in `.env`. For the integration test, set `NILE_EXECUTOR_ADDRESS` to the address controlled by `PRIVATE_KEY_NILE` (so the test can call `settle`), and ensure that address holds test USDT and a little TRX for energy.
+> **Prerequisite:** This task uses REAL Nile USDT (unlike the unit tests, which mint mock USDT). The faucet at https://nileex.io/join/getJoinPage dispenses test USDT alongside TRX — claim it to `accounts[0]`'s address (the first key in the `nile` array) and read the dispensed token's contract address into `NILE_USDT_ADDRESS`. Then, so the integration test's single account can play executor, owner, and user at once, set both `NILE_OWNER_ADDRESS` and `NILE_EXECUTOR_ADDRESS` to `accounts[0]`'s base58 address. Ensure `accounts[0]` holds test USDT and enough TRX for energy. (`accounts[0]`'s address = `tronWeb.address.fromPrivateKey(process.env.PRIVATE_KEY_NILE_0)`.)
 
 - [ ] **Step 1: Deploy to Nile**
 
@@ -1127,15 +1183,20 @@ Expected: PASS — confirms the real SunSwap V2 router accepts the `[USDT, WTRX]
 ## Prerequisites
 - Node.js + project deps installed (`npm install`)
 - `.env` populated (never commit it)
+- No local node is used — the TRE Docker image is arm64-only and this is an amd64 host. All testing is on Nile.
 
-## Local (TRE) testing
-1. `docker run -it -p 9090:9090 --rm --name tron tronbox/tre`
-2. Copy a printed private key → `.env` `PRIVATE_KEY_DEV`
-3. `npx tronbox test --network development`
+## Test account setup (one-time)
+1. `node scripts/gen-accounts.js` → paste the six `PRIVATE_KEY_NILE_0..5` into `.env`
+2. Fund `accounts[0]` at https://nileex.io/join/getJoinPage (TRX + test USDT)
+3. `node scripts/fund-accounts.js` → fans TRX to `accounts[1..5]`
 
-## Nile testnet
-1. Fund an address at https://nileex.io/join/getJoinPage (TRX + test USDT)
-2. Set `PRIVATE_KEY_NILE`, `NILE_USDT_ADDRESS`, `NILE_OWNER_ADDRESS`, `NILE_EXECUTOR_ADDRESS`
+## Run the test suite (Nile)
+- Full suite: `npx tronbox test --network nile`
+- Single file during iteration: `npx tronbox test ./test/settle.test.js --network nile`
+
+## Nile real-instance deploy + integration test
+1. Read the faucet's dispensed test-USDT contract address → `NILE_USDT_ADDRESS`
+2. Set `NILE_OWNER_ADDRESS` and `NILE_EXECUTOR_ADDRESS` to `accounts[0]`'s base58 address
 3. `npx tronbox migrate --reset --network nile`
 4. `npx tronbox test ./test/integration.nile.js --network nile`
 5. Verify the contract on https://nile.tronscan.org
@@ -1164,8 +1225,9 @@ git commit -m "test: Nile integration test + deployment runbook; update roadmap"
 
 ## Notes for the implementer
 
-- **Keep the local TRE node running** in a dedicated terminal throughout Tasks 2–7. With `--rm` it cannot be restarted; if it dies, start a fresh container and re-copy a private key into `.env`.
+- **All tests run on Nile** (`--network nile`). There is no local node — see the "Test environment note" at the top for why. Expect ~3s per transaction; a full suite run takes a few minutes. During iteration, run a single file (e.g. `npx tronbox test ./test/settle.test.js --network nile`).
+- **Keep an eye on the `accounts[0]` TRX balance.** Every deploy and `settle` burns energy/bandwidth (paid in TRX). If runs start failing with out-of-energy errors, re-run `node scripts/fund-accounts.js` or re-claim from the faucet (one claim/day). The mock contracts deploy fresh per test by default — if the suite gets too slow or expensive, refactor a test file to deploy once in a `before()` and reuse with fresh `swapId`s.
 - **Address comparisons in tests:** TronBox returns addresses as hex; account globals are base58. Normalize both sides with `tronWeb.address.fromHex(...)` before asserting equality (see Task 6).
 - **Reverts on TVM** surface as thrown JS errors; assert with the `reverted()` helper rather than a specific message — TVM does not reliably propagate `require` strings.
 - **`tronWeb` is injected** as a global in the TronBox test environment; use it for `getBalance`, `sendTransaction`, and address conversion.
-- **Do not commit `.env`.** Only `.env.example` is tracked.
+- **Do not commit `.env`** (keys live there). Only `.env.example` and the `scripts/` are tracked.
