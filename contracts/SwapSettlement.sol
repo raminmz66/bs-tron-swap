@@ -106,4 +106,12 @@ contract SwapSettlement is Ownable2Step, Pausable, ReentrancyGuard {
 
         emit Settled(swapId, user, totalUSDT, feeUSDT, trxOut);
     }
+
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
 }
