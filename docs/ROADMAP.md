@@ -28,7 +28,7 @@ The on-chain `settle()` logic. Defines the interface the backend calls.
 | Spec (`docs/superpowers/specs/2026-06-19-settlement-contract-design.md`) | ✅ Approved |
 | Plan (`docs/superpowers/plans/2026-06-24-settlement-contract.md`) | ✅ Done — executed in Cursor |
 | Build + unit tests (TronBox, Nile) | ✅ Done — 18/18 passing (`npm test`) |
-| Nile testnet integration tests | ⬜ Ready — `npm run test:integration` (needs `NILE_USDT_ADDRESS` + deploy env) |
+| Nile testnet integration tests | ✅ Done — `npm run test:integration` (SunSwap V2 + real Nile USDT) |
 
 ### 2. Backend (NestJS)
 Orchestrator: energy rental, fee math, state machine, Postgres, RPC, reconciliation. Calls the contract; exposes the API the frontend consumes. Stack details (queue lib, RPC client, energy provider) get decided at the start of its brainstorm.
@@ -65,17 +65,16 @@ Wallet connect, the single signing step, status screens. **This is where UI mock
 
 ## Where we are right now
 
-**Sub-project 1 (Contract) → Unit tests complete on Nile. Integration test + Nile deploy recording are next.**
+**Sub-project 1 (Contract) → Complete on Nile. Ready to start Sub-project 2 (Backend).**
 
 Completed:
-1. ✅ Contract spec approved
-2. ✅ Implementation plan executed (Tasks 1–8 code + unit tests)
-3. ✅ Nile unit tests green: mocks, `quoteSettle`, `settle` happy path, guards, admin (`npm test`)
+1. ✅ Contract spec + plan executed
+2. ✅ Nile unit tests (18/18) and integration test (real USDT → TRX)
+3. ✅ Nile deployment recorded in `docs/deployments.md`
 
 Immediate next steps:
-1. Set `NILE_USDT_ADDRESS`, `NILE_OWNER_ADDRESS`, `NILE_EXECUTOR_ADDRESS` in `.env` → `tronbox migrate --network nile` → `npm run test:integration`
-2. Record deployed Nile address + ABI in `docs/deployments.md`
-3. → then repeat the cycle for Sub-project 2 (Backend)
+1. Begin Backend brainstorm → spec → plan (uses `SwapSettlement` ABI + Nile address from `docs/deployments.md`)
+2. Mainnet deploy remains blocked on professional audit
 
 ---
 

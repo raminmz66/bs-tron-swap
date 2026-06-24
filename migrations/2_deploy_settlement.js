@@ -13,7 +13,7 @@ const WTRX = {
   nile: 'TYsbWxNnyTgsZaTFaue9hqpxkU3Fkco94a',
   mainnet: 'TNUC9Qb1rRpS5CbWLmNMxXBjyFoydXjWFR',
 };
-const DEPLOY_OPTS = { fee_limit: 1.5e9, userFeePercentage: 100, originEnergyLimit: 1e8 };
+const DEPLOY_OPTS = { feeLimit: 3000e6 };
 
 module.exports = async function (deployer, network) {
   const prefix = network.toUpperCase(); // NILE_ / MAINNET_
