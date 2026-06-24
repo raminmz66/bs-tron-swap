@@ -114,4 +114,33 @@ contract SwapSettlement is Ownable2Step, Pausable, ReentrancyGuard {
     function unpause() external onlyOwner {
         _unpause();
     }
+
+    function setMinFee(uint256 _minFee) external onlyOwner {
+        minFee = _minFee;
+        emit FeeParamsUpdated(minFee, feeBps, maxFeeBps, minSwapAmount);
+    }
+
+    function setFeeBps(uint256 _feeBps) external onlyOwner {
+        require(_feeBps <= maxFeeBps, "SwapSettlement: feeBps over max");
+        feeBps = _feeBps;
+        emit FeeParamsUpdated(minFee, feeBps, maxFeeBps, minSwapAmount);
+    }
+
+    function setMaxFeeBps(uint256 _maxFeeBps) external onlyOwner {
+        require(_maxFeeBps <= BPS_DENOMINATOR, "SwapSettlement: maxFeeBps too high");
+        require(_maxFeeBps >= feeBps, "SwapSettlement: max below feeBps");
+        maxFeeBps = _maxFeeBps;
+        emit FeeParamsUpdated(minFee, feeBps, maxFeeBps, minSwapAmount);
+    }
+
+    function setMinSwapAmount(uint256 _minSwapAmount) external onlyOwner {
+        minSwapAmount = _minSwapAmount;
+        emit FeeParamsUpdated(minFee, feeBps, maxFeeBps, minSwapAmount);
+    }
+
+    function setExecutor(address _executor) external onlyOwner {
+        require(_executor != address(0), "SwapSettlement: zero address");
+        executor = _executor;
+        emit ExecutorChanged(_executor);
+    }
 }
