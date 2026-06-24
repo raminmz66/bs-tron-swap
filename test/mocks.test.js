@@ -1,9 +1,11 @@
 const MockUSDT = artifacts.require('MockUSDT');
 const MockRouter = artifacts.require('MockRouter');
 
+const DEPLOY_OPTS = { feeLimit: 3000e6 };
+
 contract('mocks', (accounts) => {
   it('MockUSDT mints and transfers without returning a bool', async () => {
-    const usdt = await MockUSDT.new();
+    const usdt = await MockUSDT.new(DEPLOY_OPTS);
     await usdt.mint(accounts[0], '1000000');
     await usdt.transfer(accounts[1], '400000', { from: accounts[0] });
     assert.equal((await usdt.balanceOf(accounts[0])).toString(), '600000');
@@ -11,10 +13,12 @@ contract('mocks', (accounts) => {
   });
 
   it('MockRouter delivers native TRX to the recipient and enforces slippage', async () => {
-    const usdt = await MockUSDT.new();
-    const router = await MockRouter.new();
+    const usdt = await MockUSDT.new(DEPLOY_OPTS);
+    const router = await MockRouter.new(DEPLOY_OPTS);
     // fund the router with 100 TRX so it can pay out
-    await tronWeb.trx.sendTransaction(router.address, 100 * 1e6);
+    const routerAddr = tronWeb.address.fromHex(router.address);
+    const fundTx = await tronWeb.trx.sendTransaction(routerAddr, 100 * 1e6);
+    assert(fundTx.result, `router fund failed: ${JSON.stringify(fundTx)}`);
 
     await usdt.mint(accounts[0], '1000000');
     await usdt.approve(router.address, '1000000', { from: accounts[0] });

@@ -12,9 +12,10 @@ const nileKeys = [
 module.exports = {
   networks: {
     nile: {
-      privateKey: nileKeys,
+      privateKey: nileKeys[0],
+      privateKeys: nileKeys,
       userFeePercentage: 100,
-      feeLimit: 1000 * 1e6,
+      feeLimit: 5000 * 1e6,
       fullHost: 'https://nile.trongrid.io',
       network_id: '3',
     },
