@@ -8,7 +8,16 @@ const USDT_ABI = [
 
 const id = (n) => '0x' + n.toString(16).padStart(64, '0');
 
+const integrationReady =
+  process.env.NILE_USDT_ADDRESS &&
+  process.env.NILE_OWNER_ADDRESS &&
+  process.env.NILE_EXECUTOR_ADDRESS;
+
 contract('SwapSettlement integration (Nile)', (accounts) => {
+  before(function () {
+    if (!integrationReady) this.skip();
+  });
+
   it('swaps real USDT to native TRX via SunSwap V2 in one tx', async () => {
     const s = await SwapSettlement.deployed();
     const me = tronWeb.defaultAddress.base58; // executor + user are the same funded account here

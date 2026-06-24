@@ -7,7 +7,8 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "NODE_OPTIONS='--require ./scripts/nile-accounts-preload.js' tronbox test --network nile"
+    "test": "NODE_OPTIONS='--require ./scripts/nile-accounts-preload.js' tronbox test --network nile ./test/mocks.test.js ./test/quoteSettle.test.js ./test/settle.test.js ./test/settle-guards.test.js ./test/admin.test.js",
+    "test:integration": "NODE_OPTIONS='--require ./scripts/nile-accounts-preload.js' tronbox test --network nile ./test/integration.nile.js"
   },
   "keywords": [],
   "author": "",

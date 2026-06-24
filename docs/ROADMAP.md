@@ -26,9 +26,9 @@ The on-chain `settle()` logic. Defines the interface the backend calls.
 |---|---|
 | Brainstorm | ✅ Done |
 | Spec (`docs/superpowers/specs/2026-06-19-settlement-contract-design.md`) | ✅ Approved |
-| Plan (`docs/superpowers/plans/2026-06-24-settlement-contract.md`) | ✅ Approved — ⏳ executing in Cursor |
-| Build + unit tests (TronBox) | ⬜ Not started |
-| Nile testnet integration tests | ⬜ Not started |
+| Plan (`docs/superpowers/plans/2026-06-24-settlement-contract.md`) | ✅ Done — executed in Cursor |
+| Build + unit tests (TronBox, Nile) | ✅ Done — 18/18 passing (`npm test`) |
+| Nile testnet integration tests | ⬜ Ready — `npm run test:integration` (needs `NILE_USDT_ADDRESS` + deploy env) |
 
 ### 2. Backend (NestJS)
 Orchestrator: energy rental, fee math, state machine, Postgres, RPC, reconciliation. Calls the contract; exposes the API the frontend consumes. Stack details (queue lib, RPC client, energy provider) get decided at the start of its brainstorm.
@@ -65,14 +65,17 @@ Wallet connect, the single signing step, status screens. **This is where UI mock
 
 ## Where we are right now
 
-**Sub-project 1 (Contract) → Build step → ready to hand off to Cursor for execution (plan approved 2026-06-24).**
+**Sub-project 1 (Contract) → Unit tests complete on Nile. Integration test + Nile deploy recording are next.**
+
+Completed:
+1. ✅ Contract spec approved
+2. ✅ Implementation plan executed (Tasks 1–8 code + unit tests)
+3. ✅ Nile unit tests green: mocks, `quoteSettle`, `settle` happy path, guards, admin (`npm test`)
 
 Immediate next steps:
-1. ✅ Contract spec approved
-2. ✅ Implementation plan written & approved
-3. ⏳ Execute the plan in Cursor (subagent-driven). First human checkpoint: the Task 1A faucet step.
-4. Nile testnet verification → record deployed address + ABI in `docs/deployments.md`
-5. → then repeat the cycle for Sub-project 2 (Backend)
+1. Set `NILE_USDT_ADDRESS`, `NILE_OWNER_ADDRESS`, `NILE_EXECUTOR_ADDRESS` in `.env` → `tronbox migrate --network nile` → `npm run test:integration`
+2. Record deployed Nile address + ABI in `docs/deployments.md`
+3. → then repeat the cycle for Sub-project 2 (Backend)
 
 ---
 

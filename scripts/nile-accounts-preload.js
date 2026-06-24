@@ -1,57 +1,21 @@
-// Preload before TronBox CLI requires TronWrap (tronbox.js passes privateKeys for accounts[0..5]).
-const Module = require('module');
-const tronWrapPath = require.resolve('tronbox/build/components/TronWrap');
+// Register all Nile privateKeys for TronBox signing on public testnet.
+// TronBox only auto-loads privateKeys[] on local nodes; patch TronWrap once on disk.
+const fs = require('fs');
+const path = require('path');
 
-function patchTronWrap(TronWrap) {
-  if (!TronWrap || TronWrap.__nileAccountsPatched) return TronWrap;
+const tronWrapPath = path.join(
+  __dirname,
+  '../node_modules/tronbox/build/components/TronWrap/index.js'
+);
 
-  const originalInit = TronWrap;
-  function patchedInit(options, extraOptions) {
-    if (!options) {
-      return originalInit(options, extraOptions);
-    }
-    const keys = options.privateKeys;
-    const opts =
-      Array.isArray(keys) && keys.length > 0
-        ? { ...options, privateKey: keys[0] }
-        : options;
-    const tw = originalInit(opts, extraOptions);
-    if (Array.isArray(keys) && keys.length > 0 && !(extraOptions && extraOptions.evm)) {
-      tw._accounts = keys.map((pk) =>
-        tw.address.fromPrivateKey(String(pk).replace(/^0x/, ''))
-      );
-    }
-    return tw;
+const NEEDLE = 'privateKeyByAccount[defaultAddress]=getPrivateKey();';
+const INJECT =
+  NEEDLE +
+  'if(options.privateKeys&&options.privateKeys.length>0){options.privateKeys.forEach(function(pk){var clean=String(pk).replace(/^0x/,"");var a=tronWrap.address.fromPrivateKey(clean);privateKeyByAccount[a]=clean;try{privateKeyByAccount[tronWrap.address.toHex(a)]=clean}catch(e){}});tronWrap._accounts=options.privateKeys.map(function(pk){return tronWrap.address.fromPrivateKey(String(pk).replace(/^0x/,""))});tronWrap._accountsRequested=true;}';
+
+if (fs.existsSync(tronWrapPath)) {
+  const src = fs.readFileSync(tronWrapPath, 'utf8');
+  if (!src.includes('options.privateKeys&&options.privateKeys.length>0')) {
+    fs.writeFileSync(tronWrapPath, src.replace(NEEDLE, INJECT));
   }
-
-  Object.assign(patchedInit, {
-    config: TronWrap.config,
-    constants: TronWrap.constants,
-    logErrorAndExit: TronWrap.logErrorAndExit,
-    dlog: TronWrap.dlog,
-    sleep: TronWrap.sleep,
-    TronWeb: TronWrap.TronWeb,
-    __nileAccountsPatched: true,
-  });
-
-  require.cache[tronWrapPath].exports = patchedInit;
-  return patchedInit;
-}
-
-const originalRequire = Module.prototype.require;
-Module.prototype.require = function patchedRequire(id) {
-  const result = originalRequire.apply(this, arguments);
-  try {
-    const resolved = Module._resolveFilename(id, this);
-    if (resolved === tronWrapPath) {
-      return patchTronWrap(require.cache[tronWrapPath].exports);
-    }
-  } catch (_) {
-    // ignore unresolvable ids
-  }
-  return result;
-};
-
-if (require.cache[tronWrapPath]) {
-  patchTronWrap(require.cache[tronWrapPath].exports);
 }
