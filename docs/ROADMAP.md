@@ -25,8 +25,8 @@ The on-chain `settle()` logic. Defines the interface the backend calls.
 | Step | Status |
 |---|---|
 | Brainstorm | ✅ Done |
-| Spec (`docs/superpowers/specs/2026-06-19-settlement-contract-design.md`) | ✅ Written — ⏳ awaiting user review |
-| Plan | ⬜ Not started |
+| Spec (`docs/superpowers/specs/2026-06-19-settlement-contract-design.md`) | ✅ Approved |
+| Plan | 🔄 In progress |
 | Build + unit tests (TronBox) | ⬜ Not started |
 | Nile testnet integration tests | ⬜ Not started |
 
@@ -65,11 +65,11 @@ Wallet connect, the single signing step, status screens. **This is where UI mock
 
 ## Where we are right now
 
-**Sub-project 1 (Contract) → Spec step → awaiting user review.**
+**Sub-project 1 (Contract) → Plan step → in progress (spec approved 2026-06-24).**
 
 Immediate next steps:
-1. User reviews the contract spec
-2. `writing-plans` skill → contract implementation plan
+1. ✅ User reviewed and approved the contract spec
+2. 🔄 `writing-plans` skill → contract implementation plan
 3. TDD build of contract + tests
 4. Nile testnet verification
 5. → then repeat the cycle for Sub-project 2 (Backend)
